@@ -64,7 +64,7 @@ class TrainLoaderWrapper(object):
 
         train_dataset = MaskedFaceDataset(train_data, self.config['image_dir'].format('train'),
                                              transforms=train_T)
-        valid_dataset = MaskedFaceDataset(valid_data, self.config['image_dir'].format('valid'),
+        valid_dataset = MaskedFaceDataset(valid_data, self.config['image_dir'].format('train'),
                                              transforms=valid_T)
         
         return train_dataset, valid_dataset

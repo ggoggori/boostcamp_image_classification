@@ -1,5 +1,6 @@
 config = {
-    'num_epochs' : 1, 
+    'debuging' : True,
+    'num_epochs' : 10, 
     'batch_size' : 32,
     'valid_size' : 0.2,
     'input_dir' : './input/data',
