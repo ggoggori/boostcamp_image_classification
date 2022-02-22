@@ -1,0 +1,11 @@
+input/
+.vscode-server/
+.vscode/
+.local/
+opt/
+.cache/
+.ipython/
+.jupyter/
+.profile
+.wget-hsts
+code/
