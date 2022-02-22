@@ -1,3 +1,5 @@
+import torch
+import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
 import PIL.Image as Image
@@ -25,8 +27,8 @@ class MaskedFaceDataset(Dataset):
             image = self.transforms(image)
         
         sample = {'image':image.float(), 'labels':{'gender':gender,
-                                        'age':age, 'mask':mask,
-                                        'label':label}}
+                                                    'age':age, 'mask':mask,
+                                                    'label':label}}
         return sample
 
 class MaskedFaceDataset_Test(Dataset):
@@ -41,28 +43,29 @@ class MaskedFaceDataset_Test(Dataset):
 
 
 class TrainLoaderWrapper(object):
-    def __init__(self, batch_size:int, train_df:pd.DataFrame, valid_size:float):
-        self.batch_size = batch_size
+    def __init__(self, config, train_df:pd.DataFrame):
+        self.config = config
+        self.batch_size = self.config['batch_size']
+        self.valid_size = self.config['valid_size']
         self.train_df = train_df
-        self.valid_size = valid_size
-    
+        
     def _make_dataset(self) -> torch.utils.data.Dataset:
         '''
         return dataset
         '''
         indices = [i for i in range(len(self.train_df))]
         np.random.shuffle(indices)
-        threshold = len(indices) * (1 - self.valid_size)
-        
+        threshold = int(len(indices) * (1 - self.valid_size))
         train_idx, valid_idx = indices[:threshold], indices[threshold:]
-        train_data = self.train_df.loc[train_idx]
-        valid_data = self.train_df.loc[valid_idx]
+        train_data = self.train_df.loc[train_idx].reset_index(drop=True)
+        valid_data = self.train_df.loc[valid_idx].reset_index(drop=True)
 
-        train_T = _augmentation(mode='train')
-        valid_T = _augmentation(mode='valid')
+        train_T, valid_T = self._augmentation()
 
-        train_dataset = MaskedFaceDataset(train_data, self.folder, transform=train_T)
-        valid_dataset = MaskedFaceDataset(valid_data, self.folder, transform=valid_T)
+        train_dataset = MaskedFaceDataset(train_data, self.config['image_dir'].format('train'),
+                                             transforms=train_T)
+        valid_dataset = MaskedFaceDataset(valid_data, self.config['image_dir'].format('valid'),
+                                             transforms=valid_T)
         
         return train_dataset, valid_dataset
 
