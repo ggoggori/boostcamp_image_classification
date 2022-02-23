@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 class MaskedFaceDataset(Dataset):
-    def __init__(self, csv_file, folder, transforms=None):
+    def __init__(self, csv_file:pd.DataFrame, folder:str, transforms=None):
         self.meta = csv_file
         self.transforms = transforms
         self.folder = folder
@@ -16,7 +16,7 @@ class MaskedFaceDataset(Dataset):
     def __len__(self):
         return len(self.meta)
         
-    def __getitem__(self, idx):
+    def __getitem__(self, idx:int) -> dict:
         sample = self.meta.loc[idx]
         gender = sample['gender_label']
         age = sample['age_label']
@@ -32,21 +32,30 @@ class MaskedFaceDataset(Dataset):
         return sample
 
 class MaskedFaceDataset_Test(Dataset):
-    def __init__(self, transforms=None):
-        pass
+    def __init__(self, csv_file:pd.DataFrame, folder:str, transforms=None):
+        self.csv_file = csv_file
+        self.paths = self.csv_file['ImageID'].values
+        self.folder = folder
+        self.transforms = transforms
         
     def __len__(self):
-        pass
+        return len(self.paths)
         
-    def __getitem__(self, idx):
-        pass
+    def __getitem__(self, idx:int) -> Image:
+        path = os.path.join(self.folder, self.paths[idx])
+        image = Image.open(path)
 
+        if self.transforms is not None:
+            image = self.transforms(image)
+
+        return image.float()
 
 class TrainLoaderWrapper(object):
-    def __init__(self, config, train_df:pd.DataFrame):
+    def __init__(self, config:dict, train_df:pd.DataFrame):
         self.config = config
         self.batch_size = self.config['batch_size']
         self.valid_size = self.config['valid_size']
+        self.num_workers = self.config['num_workers']
         self.train_df = train_df
         
     def _make_dataset(self) -> torch.utils.data.Dataset:
@@ -74,8 +83,10 @@ class TrainLoaderWrapper(object):
         return dataloader
         '''
         train_dataset, valid_dataset = self._make_dataset()
-        train_dataloader = DataLoader(train_dataset, batch_size=self.batch_size)
-        valid_dataloader = DataLoader(valid_dataset, batch_size=self.batch_size)
+        train_dataloader = DataLoader(train_dataset, batch_size=self.batch_size, 
+                                        num_workers=self.num_workers, shuffle=True)
+        valid_dataloader = DataLoader(valid_dataset, batch_size=self.batch_size, 
+                                        num_workers=self.num_workers, shuffle=False)
 
         return train_dataloader, valid_dataloader
     
@@ -98,6 +109,35 @@ class TrainLoaderWrapper(object):
 
         return train_transforms, test_transforms
                 
+class TestLoaderWrapper():
+    def __init__(self, config:dict, info:pd.DataFrame):
+        self.config = config
+        self.batch_size = self.config['batch_size']
+        self.num_workers = self.config['num_workers']
+        self.info = info
+    
+    def _make_dataset(self) -> torch.utils.data.Dataset:
+        test_T = self._augmentation()
+        dataset = MaskedFaceDataset_Test(self.info, self.config['dir']['image_dir'].format('eval'),
+                                                transforms=test_T)
+
+        return dataset
+
+    def make_dataloader(self) -> torch.utils.data.DataLoader:
+        test_dataset = self._make_dataset()
+        test_dataloader = DataLoader(test_dataset, batch_size=self.batch_size, 
+                                                    num_workers=self.num_workers, shuffle=False)
+
+        return test_dataloader
+
+    def _augmentation(self) -> torchvision.transforms:
+        test_transforms = transforms.Compose([
+            transforms.CenterCrop((350)),
+            transforms.Resize((224,224)),
+            transforms.PILToTensor()
+        ])
+
+        return test_transforms
 
         
     

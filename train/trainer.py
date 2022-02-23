@@ -1,6 +1,7 @@
 import torch
 from models.model import Network
 from utils.metrics import cal_metric
+from utils.utils import get_device
 from tqdm import tqdm
 import os
 import time
@@ -13,19 +14,15 @@ config로 변수 바꿔주기
 다중 아웃풋 모델 고려
 criterion, optimizer 두개 config로 관리하기
 '''
+
 class Trainer(object):
-    def __init__(self, config, dataset):
+    def __init__(self, config:dict, dataset:TrainLoaderWrapper):
         self.config = config
         self.dataset = dataset
-        self.device = self._get_device()
+        self.device = get_device()
         now = time.localtime()
         date = f'{now.tm_mday}d-{now.tm_hour}h-{now.tm_min}m'
         self.model_checkpoint_dir = os.path.join(self.config['dir']['checkpoint_dir'], date)
-
-    def _get_device(self):
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        print(f'working on {device}')
-        return device
 
     def train_and_validate_one_epoch(self, model, epoch, dataloaders, criterion, optimizer, best_score):
         for phase in ['train', 'valid']:

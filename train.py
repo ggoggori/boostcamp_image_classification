@@ -20,7 +20,6 @@ def main():
 if __name__ == '__main__':
     main()
 
-
 # def set_randomseed():
 #     random_seed = 42
 #     torch.manual_seed(random_seed)
