@@ -1,0 +1,15 @@
+experiment: 
+  debuging : False
+
+num_epochs : 20
+batch_size : 32
+valid_size : 0.2
+
+dir:
+  input_dir : ./input/data
+  image_dir : ./input/data/{}/images
+  checkpoint_dir : ./checkpoint
+
+model_name : resnet-18
+
+

@@ -62,9 +62,9 @@ class TrainLoaderWrapper(object):
 
         train_T, valid_T = self._augmentation()
 
-        train_dataset = MaskedFaceDataset(train_data, self.config['image_dir'].format('train'),
+        train_dataset = MaskedFaceDataset(train_data, self.config['dir']['image_dir'].format('train'),
                                              transforms=train_T)
-        valid_dataset = MaskedFaceDataset(valid_data, self.config['image_dir'].format('train'),
+        valid_dataset = MaskedFaceDataset(valid_data, self.config['dir']['image_dir'].format('train'),
                                              transforms=valid_T)
         
         return train_dataset, valid_dataset
@@ -85,10 +85,14 @@ class TrainLoaderWrapper(object):
         '''
 
         train_transforms = transforms.Compose([
+            transforms.CenterCrop((350)),
+            transforms.Resize((224,224)),
             transforms.PILToTensor()
         ])
 
         test_transforms = transforms.Compose([
+            transforms.CenterCrop((350)),
+            transforms.Resize((224,224)),
             transforms.PILToTensor()
         ])
 

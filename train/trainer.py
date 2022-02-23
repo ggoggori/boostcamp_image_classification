@@ -2,7 +2,9 @@ import torch
 from models.model import Network
 from utils.metrics import cal_metric
 from tqdm import tqdm
-
+import os
+import time
+import shutil
 
 ## to-do
 '''
@@ -16,13 +18,16 @@ class Trainer(object):
         self.config = config
         self.dataset = dataset
         self.device = self._get_device()
+        now = time.localtime()
+        date = f'{now.tm_mday}d-{now.tm_hour}h-{now.tm_min}m'
+        self.model_checkpoint_dir = os.path.join(self.config['dir']['checkpoint_dir'], date)
 
     def _get_device(self):
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print(f'working on {device}')
         return device
 
-    def train_and_validate_one_epoch(self, model, epoch, dataloaders, criterion, optimizer):
+    def train_and_validate_one_epoch(self, model, epoch, dataloaders, criterion, optimizer, best_score):
         for phase in ['train', 'valid']:
             dataloader = dataloaders[phase]
             running_loss, correct = 0,0
@@ -57,22 +62,46 @@ class Trainer(object):
             
             total_loss = running_loss / len(dataloader.dataset)
             f1score, total_acc = cal_metric(predictions, targets, total_size)
-            print(f'{phase}-[EPOCH:{epoch}] |F1: {f1score} | ACC: {total_acc:.3f} | Loss: {total_loss:.5f}|')
+            print(f'{phase}-[EPOCH:{epoch}] |F1: {f1score:.3f} | ACC: {total_acc:.3f} | Loss: {total_loss:.5f}|')
 
-        #return total_loss, total_acc, f1score
+            if phase == 'valid' and f1score > best_score:
+                best_score = f1score
+                print(f'{best_score:.3f} model saved')
+                self._checkpoint(model, epoch, best_score)
+            
+        return best_score
         
     def train(self):
         model = Network().to(self.device)
         criterion = torch.nn.CrossEntropyLoss().to(self.device)
         optimizer = torch.optim.Adam(model.parameters())
+        
         train_dataloader, valid_dataloader = self.dataset.make_dataloader()
         dataloaders = {'train':train_dataloader, 'valid': valid_dataloader}
+        self._make_checkpoint_dir()
 
+        best_score = 0
         for epoch in tqdm(range(self.config['num_epochs'])):
-            self.train_and_validate_one_epoch(model, epoch, dataloaders, criterion, optimizer)
+            best_score = self.train_and_validate_one_epoch(model, epoch, dataloaders, 
+                                                            criterion, optimizer, best_score)
+            
+    def _checkpoint(self, model, epoch, f1score):
+        state = {
+            'model' : model.state_dict(),
+            'epoch' : epoch,
+            'f1_score' : f1score
+        }
+        torch.save(state, os.path.join(self.model_checkpoint_dir, f"{self.config['model_name']}.pth"))
 
-    def _checkpoint(self, epoch):
-        pass
+    def _make_checkpoint_dir(self):
+        if not os.path.exists(self.model_checkpoint_dir):
+            os.makedirs(self.model_checkpoint_dir)
+
+        shutil.copy('./config/config.yaml', self.model_checkpoint_dir)
+
+
+
+        
 
             
             
