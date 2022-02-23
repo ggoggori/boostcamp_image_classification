@@ -6,7 +6,8 @@ from tqdm import tqdm
 
 ## to-do
 '''
-metric f1 추가하기
+checkpoint 추가
+
 config로 변수 바꿔주기
 다중 아웃풋 모델 고려
 criterion, optimizer 두개 config로 관리하기
@@ -23,64 +24,57 @@ class Trainer(object):
         print(f'working on {device}')
         return device
 
-    def train_one_epoch(self, model, dataloader, criterion, optimizer):
-        model.train()
-        running_loss, correct = 0,0
-        targets, predictions = torch.Tensor([]), torch.Tensor([])
-        total_size = len(dataloader.dataset)
-        for batch in tqdm(dataloader):
-            image = batch['image'].to(self.device)
-            target = batch['labels']['label'].to(self.device)
-            output = model(image)
-            loss = criterion(output, target)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            
-            _, preds = torch.max(output, 1)
+    def train_and_validate_one_epoch(self, model, dataloaders, criterion, optimizer):
+        for phase in ['train', 'valid']:
+            dataloader = dataloaders[phase]
+            running_loss, correct = 0,0
+            targets, predictions = torch.Tensor([]), torch.Tensor([])
+            total_size = len(dataloader.dataset)
 
-            targets = torch.cat((targets, target.detach().cpu()))
-            predictions = torch.cat((predictions, preds.detach().cpu()))
+            if phase == 'train':
+                model.train()
+            else:
+                model.eval()
 
-            running_loss += loss.item() * image.size(0)
-            correct += torch.sum(preds==target)
+            for batch in tqdm(dataloader):
+                image = batch['image'].to(self.device)
+                target = batch['labels']['label'].to(self.device)
+                optimizer.zero_grad()
+
+                with torch.set_grad_enabled(phase=='train'):
+                    output = model(image)
+                    loss = criterion(output, target)
+                    
+                    if phase == 'train':
+                        loss.backward()
+                        optimizer.step()
+
+                    _, preds = torch.max(output, 1)
+
+                targets = torch.cat((targets, target.detach().cpu()))
+                predictions = torch.cat((predictions, preds.detach().cpu()))
+
+                running_loss += loss.item() * image.size(0)
+                correct += torch.sum(preds==target)
             
         total_loss = running_loss / len(dataloader.dataset)
         f1score, total_acc = cal_metric(predictions, targets, total_size)
+        print(f'{phase}-[EPOCH:{epoch}] |F1: {f1score} | ACC: {total_acc:.3f} | Loss: {toal_loss:.5f}|')
 
-        return total_loss, total_acc, f1score
-    
-    def _validate(self, model, dataloader, criterion):
-        model.eval()
-        valid_loss, valid_correct = 0, 0
-
-        with torch.no_grad():
-            for batch in dataloader:
-                image = batch['image'].to(self.device)
-                target = batch['labels']['label'].to(self.device)
-                output = model(image)
-                loss = criterion(output, target)
-
-                _, preds = torch.max(output, 1) 
-                
-                valid_loss += loss.item() * image.size(0)
-                valid_correct += torch.sum(preds==target)
-        
-        total_valid_loss = valid_loss/len(dataloader.dataset)
-        total_valid_acc = valid_correct/len(dataloader.dataset)
-
-        return total_valid_loss, total_valid_acc
+        #return total_loss, total_acc, f1score
         
     def train(self):
         model = Network().to(self.device)
         criterion = torch.nn.CrossEntropyLoss().to(self.device)
         optimizer = torch.optim.Adam(model.parameters())
         train_dataloader, valid_dataloader = self.dataset.make_dataloader()
+        dataloaders = {'train':train_dataloader, 'valid': valid_dataloader}
 
         for epoch in tqdm(range(self.config['num_epochs'])):
-            train_loss, train_metric = self.train_one_epoch(model, train_dataloader, 
-                                                        criterion, optimizer)
-            print(f'Train-[EPOCH:{epoch}] | ACC: {train_metric:.3f} | Loss: {train_loss:.5f}|')
-            valid_loss, valid_metric = self._validate(model, valid_dataloader, 
-                                                          criterion)
-            print(f'Valid-[EPOCH:{epoch}] | ACC: {valid_metric:.3f} | Loss: {valid_loss:.3f}|')
+            self.train_and_validate_one_epoch(model, dataloaders, criterion, optimizer)
+
+    def _checkpoint(self, epoch):
+        pass
+
+            
+            
