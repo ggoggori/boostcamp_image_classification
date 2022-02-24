@@ -2,6 +2,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
+from sklearn.model_selection import StratifiedShuffleSplit
 import PIL.Image as Image
 import os
 import numpy as np
@@ -23,10 +24,11 @@ class MaskedFaceDataset(Dataset):
         mask = sample['mask_label']
         label = sample['class']
         image = Image.open(os.path.join(self.folder,sample['detail_path']))
+
         if self.transforms is not None:
             image = self.transforms(image)
         
-        sample = {'image':image.float(), 'labels':{'gender':gender,
+        sample = {'image':image, 'labels':{'gender':gender,
                                                     'age':age, 'mask':mask,
                                                     'label':label}}
         return sample
@@ -48,7 +50,7 @@ class MaskedFaceDataset_Test(Dataset):
         if self.transforms is not None:
             image = self.transforms(image)
 
-        return image.float()
+        return image
 
 class TrainLoaderWrapper(object):
     def __init__(self, config:dict, train_df:pd.DataFrame):
@@ -63,13 +65,14 @@ class TrainLoaderWrapper(object):
         return dataset
         '''
         indices = [i for i in range(len(self.train_df))]
-        np.random.shuffle(indices)
-        threshold = int(len(indices) * (1 - self.valid_size))
-        train_idx, valid_idx = indices[:threshold], indices[threshold:]
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=self.valid_size, random_state=self.config['random_seed'])
+        for train_idx, valid_idx in sss.split(indices, self.train_df['class']):
+            pass
+        
         train_data = self.train_df.loc[train_idx].reset_index(drop=True)
         valid_data = self.train_df.loc[valid_idx].reset_index(drop=True)
 
-        train_T, valid_T = self._augmentation()
+        train_T, valid_T = get_augmentation('train')
 
         train_dataset = MaskedFaceDataset(train_data, self.config['dir']['image_dir'].format('train'),
                                              transforms=train_T)
@@ -89,25 +92,6 @@ class TrainLoaderWrapper(object):
                                         num_workers=self.num_workers, shuffle=False)
 
         return train_dataloader, valid_dataloader
-    
-    def _augmentation(self) -> torchvision.transforms:
-        '''
-        return torchvision.transforms
-        '''
-
-        train_transforms = transforms.Compose([
-            transforms.CenterCrop((350)),
-            transforms.Resize((224,224)),
-            transforms.PILToTensor()
-        ])
-
-        test_transforms = transforms.Compose([
-            transforms.CenterCrop((350)),
-            transforms.Resize((224,224)),
-            transforms.PILToTensor()
-        ])
-
-        return train_transforms, test_transforms
                 
 class TestLoaderWrapper():
     def __init__(self, config:dict, info:pd.DataFrame):
@@ -117,7 +101,7 @@ class TestLoaderWrapper():
         self.info = info
     
     def _make_dataset(self) -> torch.utils.data.Dataset:
-        test_T = self._augmentation()
+        test_T = get_augmentation('test')
         dataset = MaskedFaceDataset_Test(self.info, self.config['dir']['image_dir'].format('eval'),
                                                 transforms=test_T)
 
@@ -129,18 +113,35 @@ class TestLoaderWrapper():
                                                     num_workers=self.num_workers, shuffle=False)
 
         return test_dataloader
-
-    def _augmentation(self) -> torchvision.transforms:
-        test_transforms = transforms.Compose([
-            transforms.CenterCrop((350)),
-            transforms.Resize((224,224)),
-            transforms.PILToTensor()
-        ])
-
-        return test_transforms
-
         
-    
+def get_augmentation(mode) -> torchvision.transforms:
+    '''
+    return torchvision.transforms
+    '''
+    mean = [0.485, 0.456, 0.406]
+    std = [0.229, 0.224, 0.225]
+
+    train_transforms = transforms.Compose([
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomRotation(degrees=20),
+        #transforms.CenterCrop((350)),
+        transforms.Resize((224,224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=mean, std=std)
+    ])
+
+    test_transforms = transforms.Compose([
+        #transforms.CenterCrop((350)),
+        transforms.Resize((224,224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=mean, std=std)
+    ])
+
+    if mode == 'train':
+        return train_transforms, test_transforms 
+
+    elif mode == 'test':
+        return test_transforms
         
 
 
