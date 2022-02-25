@@ -16,7 +16,7 @@ def main():
 
     device = get_device()
     model = Network()
-    model.load_state_dict(torch.load('checkpoint/25d-2h-27m/resnet-18.pth')['model'])
+    model.load_state_dict(torch.load('checkpoint/25d-6h-59m/EfficientNet-b0.pt')['model'])
     model = model.to(device)
     
     preds = []

@@ -4,7 +4,7 @@ import os
 def define_age(age):
     if age<30:
         return 0
-    elif 30<=age<60:
+    elif age<60:
         return 1
     else:
         return 2
@@ -16,6 +16,7 @@ def define_mask(mask_type):
         mask = 1
     else:
         mask = 0
+
     return mask
 
 def processing_df(df, config):
@@ -26,7 +27,7 @@ def processing_df(df, config):
     df['age_label'] = df['age'].apply(define_age) # age 구간화
     df['mask_label'] = df['mask_type'].map(define_mask) # mask type labeling
     df['gender_label'] = df['gender'].map(lambda x: 0 if x == 'male' else 1) # gender labeling
-    df['class'] = df['mask_label']*6 +df['gender_label']*3 +df['age_label'] # class labeling
+    df['class'] = df['mask_label']*6 + df['gender_label']*3 + df['age_label'] # class labeling
     df = df[['id','gender','race','age','mask_type','path','image_path','detail_path','age_label','mask_label','gender_label','class']] # 필요한 col만 추출
     df = df.reset_index(drop=True)
 

@@ -71,7 +71,7 @@ class Trainer(object):
         
     def train(self):
         set_randomseed(self.config['random_seed'])
-        model = Network().to(self.device)
+        model = Network(self.config).to(self.device)
         criterion = torch.nn.CrossEntropyLoss().to(self.device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=float(self.config['LR']))
         
@@ -94,7 +94,7 @@ class Trainer(object):
             'epoch' : epoch,
             'f1_score' : f1score
         }
-        torch.save(state, os.path.join(self.model_checkpoint_dir, f"{self.config['model_name']}.pth"))
+        torch.save(state, os.path.join(self.model_checkpoint_dir, f"{self.config['model']['model_name']}.pt"))
 
     def _make_checkpoint_dir(self):
         if not os.path.exists(self.model_checkpoint_dir):

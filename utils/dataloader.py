@@ -12,20 +12,20 @@ import pandas as pd
 
 class MaskedFaceDataset(Dataset):
     def __init__(self, csv_file:pd.DataFrame, folder:str, transforms=None):
-        self.meta = csv_file
+        self.csv_file = csv_file
         self.transforms = transforms
         self.folder = folder
-        
+
     def __len__(self):
-        return len(self.meta)
+        return len(self.csv_file)
         
     def __getitem__(self, idx:int) -> dict:
-        sample = self.meta.loc[idx]
+        sample = self.csv_file.loc[idx]
         gender = sample['gender_label']
         age = sample['age_label']
         mask = sample['mask_label']
         label = sample['class']
-        image = Image.open(os.path.join(self.folder,sample['detail_path']))
+        image = Image.open(os.path.join(self.folder, sample['detail_path']))
 
         if self.transforms is not None:
             image = self.transforms(image)
@@ -57,10 +57,10 @@ class MaskedFaceDataset_Test(Dataset):
 class TrainLoaderWrapper(object):
     def __init__(self, config:dict, train_df:pd.DataFrame):
         self.config = config
+        self.train_df = train_df
         self.batch_size = self.config['batch_size']
         self.valid_size = self.config['valid_size']
         self.num_workers = self.config['num_workers']
-        self.train_df = train_df
         
     def _make_dataset(self) -> torch.utils.data.Dataset:
         '''
@@ -68,7 +68,7 @@ class TrainLoaderWrapper(object):
         '''
         self.train_df['age_label'] = self.train_df['age'].apply(define_age)
 
-        mskf = MultilabelStratifiedKFold(n_splits=2, shuffle=True)
+        mskf = MultilabelStratifiedKFold(n_splits=2, shuffle=True, random_state=self.config['random_seed'])
         for train_idx, valid_idx in mskf.split(self.train_df, self.train_df[['gender','age_label']]):
             pass
         
@@ -125,16 +125,16 @@ def get_augmentation(mode) -> torchvision.transforms:
     std = [0.229, 0.224, 0.225]
 
     train_transforms = transforms.Compose([
+        transforms.CenterCrop((380)),
         transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomRotation(degrees=20),
-        #transforms.CenterCrop((350)),
+        transforms.RandomRotation(degrees=10),
         transforms.Resize((224,224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=mean, std=std)
     ])
 
     test_transforms = transforms.Compose([
-        #transforms.CenterCrop((350)),
+        transforms.CenterCrop((380)),
         transforms.Resize((224,224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=mean, std=std)
