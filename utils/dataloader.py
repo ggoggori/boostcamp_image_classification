@@ -2,7 +2,9 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
-from sklearn.model_selection import StratifiedShuffleSplit
+#from sklearn.model_selection import StratifiedShuffleSplit
+from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
+from utils.processing import *
 import PIL.Image as Image
 import os
 import numpy as np
@@ -64,14 +66,15 @@ class TrainLoaderWrapper(object):
         '''
         return dataset
         '''
-        indices = [i for i in range(len(self.train_df))]
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=self.valid_size, random_state=self.config['random_seed'])
-        for train_idx, valid_idx in sss.split(indices, self.train_df['class']):
+        self.train_df['age_label'] = self.train_df['age'].apply(define_age)
+
+        mskf = MultilabelStratifiedKFold(n_splits=2, shuffle=True)
+        for train_idx, valid_idx in mskf.split(self.train_df, self.train_df[['gender','age_label']]):
             pass
         
-        train_data = self.train_df.loc[train_idx].reset_index(drop=True)
-        valid_data = self.train_df.loc[valid_idx].reset_index(drop=True)
-
+        train_data = processing_df(self.train_df.loc[train_idx].reset_index(drop=True), self.config)
+        valid_data = processing_df(self.train_df.loc[valid_idx].reset_index(drop=True), self.config)
+        
         train_T, valid_T = get_augmentation('train')
 
         train_dataset = MaskedFaceDataset(train_data, self.config['dir']['image_dir'].format('train'),

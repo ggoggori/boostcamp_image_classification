@@ -2,21 +2,22 @@ import torch
 from models.model import Network
 from utils.metrics import cal_metric
 from utils.utils import get_device
+import numpy as np
+import random
 from tqdm import tqdm
 import os
 import time
 import shutil
+import sys
 
 ## to-do
 '''
-checkpoint 추가
-config로 변수 바꿔주기
 다중 아웃풋 모델 고려
 criterion, optimizer 두개 config로 관리하기
 '''
 
 class Trainer(object):
-    def __init__(self, config:dict, dataset:TrainLoaderWrapper):
+    def __init__(self, config:dict, dataset):
         self.config = config
         self.dataset = dataset
         self.device = get_device()
@@ -69,19 +70,24 @@ class Trainer(object):
         return best_score
         
     def train(self):
+        set_randomseed(self.config['random_seed'])
         model = Network().to(self.device)
         criterion = torch.nn.CrossEntropyLoss().to(self.device)
-        optimizer = torch.optim.Adam(model.parameters())
+        optimizer = torch.optim.AdamW(model.parameters(), lr=float(self.config['LR']))
         
         train_dataloader, valid_dataloader = self.dataset.make_dataloader()
         dataloaders = {'train':train_dataloader, 'valid': valid_dataloader}
         self._make_checkpoint_dir()
+        
+        sys.stdout = open(self.model_checkpoint_dir +'/training_log.txt', 'w')
 
         best_score = 0
         for epoch in tqdm(range(self.config['num_epochs'])):
             best_score = self.train_and_validate_one_epoch(model, epoch, dataloaders, 
                                                             criterion, optimizer, best_score)
-            
+
+        sys.stdout.close()
+
     def _checkpoint(self, model, epoch, f1score):
         state = {
             'model' : model.state_dict(),
@@ -96,8 +102,14 @@ class Trainer(object):
 
         shutil.copy('./config/config.yaml', self.model_checkpoint_dir)
 
-
-
+def set_randomseed(random_seed):
+    torch.manual_seed(random_seed)
+    torch.cuda.manual_seed(random_seed)
+    torch.cuda.manual_seed_all(random_seed) # if use multi-GPU
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(random_seed)
+    random.seed(random_seed)
         
 
             
