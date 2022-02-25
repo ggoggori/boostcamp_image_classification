@@ -29,7 +29,7 @@ class Trainer(object):
         for phase in ['train', 'valid']:
             dataloader = dataloaders[phase]
             running_loss, correct = 0,0
-            targets, predictions = torch.Tensor([]), torch.Tensor([])
+            targets, predictions = [], []
             total_size = len(dataloader.dataset)
 
             if phase == 'train':
@@ -52,13 +52,15 @@ class Trainer(object):
 
                     _, preds = torch.max(output, 1)
 
-                targets = torch.cat((targets, target.detach().cpu()))
-                predictions = torch.cat((predictions, preds.detach().cpu()))
+                targets.append(target)
+                predictions.append(preds)
 
                 running_loss += loss.item() * image.size(0)
                 correct += torch.sum(preds==target)
-            
+
             total_loss = running_loss / len(dataloader.dataset)
+            targets = torch.cat(targets)
+            predictions = torch.cat(predictions)
             f1score, total_acc = cal_metric(predictions, targets, total_size)
             print(f'{phase}-[EPOCH:{epoch}] |F1: {f1score:.3f} | ACC: {total_acc:.3f} | Loss: {total_loss:.5f}|')
 

@@ -9,14 +9,15 @@ import warnings
 warnings.filterwarnings('ignore')
 
 def main():
-    config = yaml.load(open("./config/" + "config.yaml", "r"), Loader=yaml.FullLoader)
+    checkpoint_dir = './checkpoint/25d-12h-19m'
+    config = yaml.load(open(checkpoint_dir + "/config.yaml", "r"), Loader=yaml.FullLoader)
     info = pd.read_csv(os.path.join(config['dir']['input_dir'], 'eval/info.csv')) 
     feeder = TestLoaderWrapper(config, info)
     dataloader = feeder.make_dataloader()
 
     device = get_device()
-    model = Network()
-    model.load_state_dict(torch.load('checkpoint/25d-6h-59m/EfficientNet-b0.pt')['model'])
+    model = Network(config)
+    model.load_state_dict(torch.load(os.path.join(checkpoint_dir, config['model']['model_name']+'.pt'))['model'])
     model = model.to(device)
     
     preds = []
