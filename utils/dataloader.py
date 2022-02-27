@@ -3,7 +3,7 @@ import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
 #from sklearn.model_selection import StratifiedShuffleSplit
-from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
+from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 from utils.processing import *
 import PIL.Image as Image
 import os
@@ -68,13 +68,12 @@ class TrainLoaderWrapper(object):
         '''
         self.train_df['age_label'] = self.train_df['age'].apply(define_age)
 
-        mskf = MultilabelStratifiedKFold(n_splits=2, shuffle=True, random_state=self.config['random_seed'])
+        mskf = MultilabelStratifiedShuffleSplit(n_splits=1, test_size=self.valid_size, random_state=self.config['random_seed'])
         for train_idx, valid_idx in mskf.split(self.train_df, self.train_df[['gender','age_label']]):
             pass
         
         train_data = processing_df(self.train_df.loc[train_idx].reset_index(drop=True), self.config)
         valid_data = processing_df(self.train_df.loc[valid_idx].reset_index(drop=True), self.config)
-        
         train_T, valid_T = get_augmentation('train')
 
         train_dataset = MaskedFaceDataset(train_data, self.config['dir']['image_dir'].format('train'),
@@ -125,16 +124,16 @@ def get_augmentation(mode) -> torchvision.transforms:
     std = [0.229, 0.224, 0.225]
 
     train_transforms = transforms.Compose([
-        transforms.CenterCrop((380)),
+        #transforms.CenterCrop((380)),
         transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomRotation(degrees=10),
+        transforms.RandomRotation(degrees=7),
         transforms.Resize((224,224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=mean, std=std)
     ])
 
     test_transforms = transforms.Compose([
-        transforms.CenterCrop((380)),
+        #transforms.CenterCrop((380)),
         transforms.Resize((224,224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=mean, std=std)

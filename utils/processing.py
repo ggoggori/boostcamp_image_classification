@@ -20,7 +20,7 @@ def define_mask(mask_type):
     return mask
 
 def processing_df(df, config):
-    df['image_path'] =df['path'].map(lambda x: [i for i in os.listdir(os.path.join(config['dir']['image_dir'].format('train') ,x)) if not i.startswith('.')]) # 상세 path list 만들기
+    df['image_path'] = df['path'].map(lambda x: [i for i in os.listdir(os.path.join(config['dir']['image_dir'].format('train') ,x)) if not i.startswith('.')]) # 상세 path list 만들기
     df = df.explode('image_path') # path list row 단위로 나누기
     df['detail_path'] = df['path'] + '/' + df['image_path'] # image 위치 부여
     df['mask_type'] = df['image_path'].map(lambda x:x.split('.')[0]) # mask type 부여

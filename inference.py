@@ -8,8 +8,16 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
+
+def get_class(gender, age, mask):
+    a = (gender >= 0.5).float().squeeze()
+    b = age.argmax(dim=1)
+    c = mask.argmax(dim=1)
+    d = torch.stack((a,b,c))
+    return [(i[0]*3 + i[1] + i[2]*6).item() for i in d.T]
+
 def main():
-    checkpoint_dir = './checkpoint/25d-12h-19m'
+    checkpoint_dir = './checkpoint/26d-16h-51m'
     config = yaml.load(open(checkpoint_dir + "/config.yaml", "r"), Loader=yaml.FullLoader)
     info = pd.read_csv(os.path.join(config['dir']['input_dir'], 'eval/info.csv')) 
     feeder = TestLoaderWrapper(config, info)
@@ -23,10 +31,17 @@ def main():
     preds = []
     for image in dataloader:
         image = image.to(device)
-        pred = model(image) 
-        pred = pred.argmax(dim=-1)
-        preds.extend(pred.cpu().numpy())
-    
+        if config['model']['output_structure'] == 'single':
+            pred = model(image) 
+            pred = pred.argmax(dim=-1)
+            pred = pred.cpu().numpy()
+
+        elif config['model']['output_structure'] == 'multiple':
+            gender, age, mask = model(image)
+            pred = get_class(gender, age, mask)
+            
+        preds.extend(pred)
+
     info['ans'] = preds
     info.to_csv('submission.csv', index=False)
     print('inference is done!')
