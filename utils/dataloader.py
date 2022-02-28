@@ -1,6 +1,8 @@
 import torch
 import torchvision
 import torchvision.transforms as transforms
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 from torch.utils.data import Dataset, DataLoader
 from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 from utils.processing import *
@@ -27,7 +29,7 @@ class MaskedFaceDataset(Dataset):
         image = Image.open(os.path.join(self.folder, sample['detail_path']))
 
         if self.transforms is not None:
-            image = self.transforms(image)
+            image = self.transforms(image=np.array(image))['image']
         
         sample = {'image':image, 'labels':{'gender':gender,
                                                     'age':age, 'mask':mask,
@@ -49,7 +51,7 @@ class MaskedFaceDataset_Test(Dataset):
         image = Image.open(path)
 
         if self.transforms is not None:
-            image = self.transforms(image)
+            image = self.transforms(image=np.array(image))['image']
 
         return image
 
@@ -122,22 +124,31 @@ def get_augmentation(mode) -> torchvision.transforms:
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
 
-    train_transforms = transforms.Compose([
-        transforms.CenterCrop((380)),
-        transforms.Resize((224,224)),
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomRotation(degrees=7),
-        transforms.RandomPerspective(p=0.3),
-        transforms.ColorJitter(brightness=(0.5, 2)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=mean, std=std)
+    train_transforms = A.Compose([
+        A.CenterCrop(384,384),
+        A.Resize(256,256),
+        A.HorizontalFlip(p=0.5),
+        A.OneOf([
+            A.Rotate(limit=(-20,20), p=1),
+            A.PiecewiseAffine(p=1.0, scale=(0.01, 0.05))
+        ], p=1),
+        A.OneOf([
+            A.RandomBrightnessContrast(p=1),  
+            A.MotionBlur(p=1, blur_limit=5)
+        ], p=1),
+        A.OneOf([
+            A.GridDropout(p=1,ratio=0.3),
+            A.Cutout(p=1, num_holes=20), 
+        ], p=1),
+        A.Normalize(mean=mean, std=std),
+        ToTensorV2(),
     ])
 
-    test_transforms = transforms.Compose([
-        transforms.CenterCrop((380)),
-        transforms.Resize((224,224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=mean, std=std)
+    test_transforms = A.Compose([
+        A.CenterCrop(384,384),
+        A.Resize(256,256),
+        A.Normalize(mean=mean, std=std),
+        ToTensorV2(),
     ])
 
     if mode == 'train':
