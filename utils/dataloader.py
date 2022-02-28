@@ -125,7 +125,7 @@ def get_augmentation(mode) -> torchvision.transforms:
     std = [0.229, 0.224, 0.225]
 
     train_transforms = A.Compose([
-        A.CenterCrop(384,384),
+        #A.CenterCrop(384,384),
         A.Resize(256,256),
         A.HorizontalFlip(p=0.5),
         A.OneOf([
@@ -145,7 +145,7 @@ def get_augmentation(mode) -> torchvision.transforms:
     ])
 
     test_transforms = A.Compose([
-        A.CenterCrop(384,384),
+        #A.CenterCrop(384,384),
         A.Resize(256,256),
         A.Normalize(mean=mean, std=std),
         ToTensorV2(),

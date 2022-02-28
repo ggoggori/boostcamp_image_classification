@@ -16,7 +16,13 @@ import wandb
 '''
 criterion, optimizer 두개 config로 관리하기
 
-스레기 이미지 제거
+-상체만 crop하기-
+resize 384,384하면 위아래로 64가 crop됨.
+이렇게 하면 머리가 잘려서 안좋은 결과를 낳을 수 있다.
+그래서 위는 24 crop
+아래는 52정도 crop하려고 함.
+image[24:460,:,:]
+
 cross validation 추가
 age, gender, mask 각각 f1 score logging하기
 image sample추가(정답, 예측값 캡션달기)
@@ -77,7 +83,7 @@ class Trainer(object):
             total_loss = running_loss / len(dataloader.dataset)
             targets = torch.cat(targets)
             predictions = torch.cat(predictions)
-            f1score, total_acc = cal_metric(predictions, targets, total_size)
+            f1score, total_acc = cal_metric(predictions, targets, total_size, self.config['model']['num_classes'])
             print(f'{phase}-[EPOCH:{epoch}] |F1: {f1score:.3f} | ACC: {total_acc:.3f} | Loss: {total_loss:.5f}|')
 
             if phase == 'valid' and f1score > best_score:
