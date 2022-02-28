@@ -10,10 +10,10 @@ import time
 import shutil
 import sys
 import math
+import wandb
 
 ## to-do
 '''
-다중 아웃풋 모델 고려
 criterion, optimizer 두개 config로 관리하기
 '''
 
@@ -23,8 +23,8 @@ class Trainer(object):
         self.dataset = dataset
         self.device = get_device()
         now = time.localtime()
-        date = f'{now.tm_mday}d-{now.tm_hour}h-{now.tm_min}m'
-        self.model_checkpoint_dir = os.path.join(self.config['dir']['checkpoint_dir'], date)
+        self.date = f'{now.tm_mday}d-{now.tm_hour}h-{now.tm_min}m'
+        self.model_checkpoint_dir = os.path.join(self.config['dir']['checkpoint_dir'], self.date)
 
     def train_and_validate_one_epoch(self, model, epoch, dataloaders, criterion, optimizer, best_score):
         for phase in ['train', 'valid']:
@@ -65,11 +65,12 @@ class Trainer(object):
             f1score, total_acc = cal_metric(predictions, targets, total_size)
             print(f'{phase}-[EPOCH:{epoch}] |F1: {f1score:.3f} | ACC: {total_acc:.3f} | Loss: {total_loss:.5f}|')
 
-            if phase == 'valid' and total_loss < best_score:
-                best_score = total_loss
+            if phase == 'valid' and f1score > best_score:
+                best_score = f1score
                 print(f'{best_score:.3f} model saved')
                 self._checkpoint(model, epoch, best_score)
-            
+
+            wandb.log({f"f1score_{phase}":f1score, f"loss_{phase}":total_loss })
         return best_score
 
     def train_and_validate_one_epoch_multiple(self, model, epoch, dataloaders, criterion_ce, criterion_bce, optimizer, best_score):
@@ -113,14 +114,20 @@ class Trainer(object):
             f1score, total_acc = cal_metric(predictions, targets, total_size)
             print(f'{phase}-[EPOCH:{epoch}] |F1: {f1score:.3f} | ACC: {total_acc:.3f} | Loss: {total_loss:.5f}|')
 
-            if phase == 'valid' and total_loss < best_score:
-                best_score = total_loss
+            if phase == 'valid' and f1score > best_score:
+                best_score = f1score
                 print(f'{best_score:.3f} model saved')
                 self._checkpoint(model, epoch, best_score)
-            
+
+            wandb.log({f"f1score_{phase}":f1score, f"loss_{phase}":total_loss })
+
         return best_score
         
     def train(self):
+        wandb.init(project='image_classification', reinit=True, config=self.config)
+        wandb.run.name = self.date
+        wandb.run.save()
+
         set_randomseed(self.config['random_seed'])
         model = Network(self.config).to(self.device)
         criterion_ce = torch.nn.CrossEntropyLoss()
@@ -132,8 +139,9 @@ class Trainer(object):
         self._make_checkpoint_dir()
         
         sys.stdout = open(self.model_checkpoint_dir +'/training_log.txt', 'w')
+        print(train_dataloader.dataset.transforms)
 
-        best_score = math.inf  
+        best_score = 0
         for epoch in tqdm(range(self.config['num_epochs'])):
             if self.config['model']['output_structure'] == 'single':
                 best_score = self.train_and_validate_one_epoch(model, epoch, dataloaders, 

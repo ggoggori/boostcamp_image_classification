@@ -2,7 +2,6 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
-#from sklearn.model_selection import StratifiedShuffleSplit
 from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 from utils.processing import *
 import PIL.Image as Image
@@ -124,16 +123,18 @@ def get_augmentation(mode) -> torchvision.transforms:
     std = [0.229, 0.224, 0.225]
 
     train_transforms = transforms.Compose([
-        #transforms.CenterCrop((380)),
+        transforms.CenterCrop((380)),
+        transforms.Resize((224,224)),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomRotation(degrees=7),
-        transforms.Resize((224,224)),
+        transforms.RandomPerspective(p=0.3),
+        transforms.ColorJitter(brightness=(0.5, 2)),
         transforms.ToTensor(),
         transforms.Normalize(mean=mean, std=std)
     ])
 
     test_transforms = transforms.Compose([
-        #transforms.CenterCrop((380)),
+        transforms.CenterCrop((380)),
         transforms.Resize((224,224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=mean, std=std)

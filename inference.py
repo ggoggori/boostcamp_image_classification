@@ -17,7 +17,7 @@ def get_class(gender, age, mask):
     return [(i[0]*3 + i[1] + i[2]*6).item() for i in d.T]
 
 def main():
-    checkpoint_dir = './checkpoint/26d-16h-51m'
+    checkpoint_dir = './checkpoint/27d-14h-53m'
     config = yaml.load(open(checkpoint_dir + "/config.yaml", "r"), Loader=yaml.FullLoader)
     info = pd.read_csv(os.path.join(config['dir']['input_dir'], 'eval/info.csv')) 
     feeder = TestLoaderWrapper(config, info)
@@ -27,6 +27,7 @@ def main():
     model = Network(config)
     model.load_state_dict(torch.load(os.path.join(checkpoint_dir, config['model']['model_name']+'.pt'))['model'])
     model = model.to(device)
+    model.eval()
     
     preds = []
     for image in dataloader:
