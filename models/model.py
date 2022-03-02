@@ -9,8 +9,7 @@ class Network(nn.Module):
         super(Network, self).__init__()
         self.config = config
         self.model = self.get_model(self.config['model']['model_name'])
-        self.num_ftrs = 1000
-        self.linear = nn.Linear(self.num_ftrs, 18)
+        self.num_ftrs = self.config['model']['num_classes']
         self.linear1 = nn.Linear(self.num_ftrs, 1)
         self.linear2 = nn.Linear(self.num_ftrs, 3)
         self.linear3 =  nn.Linear(self.num_ftrs, 6)
@@ -19,8 +18,7 @@ class Network(nn.Module):
         x = self.model(x)
         
         if self.config['model']['output_structure'] == 'single':
-            output = self.linear(x)
-            return output
+            return x
         
         elif self.config['model']['output_structure'] == 'multiple':
             output1 = F.sigmoid(self.linear1(x))
@@ -36,18 +34,12 @@ class Network(nn.Module):
 
         if 'efficientnet' in model_name:
             if pretrained:
-                model = EfficientNet.from_pretrained(model_name)
+                model = EfficientNet.from_pretrained(model_name, num_classes=n_classes)
             else: 
-                model = EfficientNet.from_name(model_name)
-            
-        elif 'resnet' in model_name:
-            model = models.resnet18(pretrained=pretrained)
-                
-        elif 'densenet' in model_name:
-            model = models.densenet161(pretrained=pretrained)
+                model = EfficientNet.from_name(model_name, num_classes=n_classes)
         
         elif 'regnet' in model_name:
-            model = timm.create_model('regnetx_004', pretrained=pretrained)
+            model = timm.create_model(model_name, pretrained=pretrained, num_classes=n_classes)
         
         else:
             raise Exception('Model Name Error')

@@ -16,10 +16,6 @@ import wandb
 '''
 loss, optimizer 두개 config로 관리하기
 cross validation 추가
-age, gender, mask 각각 f1 score logging하기
-image sample추가(정답, 예측값 캡션달기)
-데이터 로더 빠르게하기
-학습 후 개선점을 파악하기 위해서 confusion matirx같은게 있긴 해야할 것 같음!! 해결책을 강구해보기
 '''
 
 class Trainer(object):
@@ -35,7 +31,7 @@ class Trainer(object):
         for phase in ['train', 'valid']:
             dataloader = dataloaders[phase]
             running_loss, correct = 0,0
-            targets, predictions = [], []
+            target_dict, pred_dict = {'target':[], 'age':[], 'gender':[], 'mask':[]}, {'target':[], 'age':[], 'gender':[], 'mask':[]}
             total_size = len(dataloader.dataset)
 
             if phase == 'train':
@@ -53,43 +49,64 @@ class Trainer(object):
                         output = model(image)
                         loss = criterion_ce(output, target)
 
+                        _, preds = torch.max(output, 1)
+                        target_dict['target'].append(target)
+                        pred_dict['target'].append(preds)
+
                     elif output_structure == 'multiple':
                         gender_out, age_out, mask_out  = model(image)
-                        loss = criterion_bce(gender_out.squeeze(), gender.float()) + criterion_ce(age_out, age) + criterion_ce(mask_out, mask) 
-                        output = age_out
-                        target = age
+                        loss = criterion_bce(gender_out.squeeze(), gender.float()) + criterion_ce(age_out, age) + criterion_ce(mask_out, mask)
+                        
+                        preds_gender = (gender >= 0.5).float()
+                        _, preds_age = torch.max(age_out, 1)
+                        _, preds_mask = torch.max(mask_out, 1)
+                        target_dict['age'].append(age)
+                        pred_dict['age'].append(preds_age)
+                        target_dict['gender'].append(gender)
+                        pred_dict['gender'].append(preds_gender)                        
+                        target_dict['mask'].append(mask)
+                        pred_dict['mask'].append(preds_mask)
 
                     if phase == 'train':
                         loss.backward()
                         optimizer.step()
 
-                    _, preds = torch.max(output, 1)
-
-                targets.append(target)
-                predictions.append(preds)
-
                 running_loss += loss.item() * image.size(0)
-                correct += torch.sum(preds==target)
+
+            for (key0, value0), (key1, value1) in zip(target_dict.items(), pred_dict.items()):
+                if len(value0) == 0:
+                    continue
+                target_dict[key0] = torch.cat(value0)
+                pred_dict[key1] = torch.cat(value1)
+    
+            if output_structure == 'single':
+                f1score, total_acc = cal_metric(pred_dict['target'], target_dict['target'], total_size, self.config['model']['num_classes'])
+            elif output_structure == 'multiple':
+                f1score_age, total_acc_age = cal_metric(pred_dict['age'], target_dict['age'], total_size, 3)
+                f1score_gender, total_acc_gender = cal_metric(pred_dict['gender'], target_dict['gender'], total_size, 2)
+                f1score_mask, total_acc_mask = cal_metric(pred_dict['mask'], target_dict['mask'], total_size, 6)
+                f1score = np.mean([f1score_age, f1score_gender, f1score_mask])
+                total_acc = np.mean([total_acc_age, total_acc_gender, total_acc_mask])
 
             total_loss = running_loss / len(dataloader.dataset)
-            targets = torch.cat(targets)
-            predictions = torch.cat(predictions)
-            f1score, total_acc = cal_metric(predictions, targets, total_size, self.config['model']['num_classes'])
             print(f'{phase}-[EPOCH:{epoch}] |F1: {f1score:.3f} | ACC: {total_acc:.3f} | Loss: {total_loss:.5f}|')
 
             if phase == 'valid' and f1score > best_score:
                 best_score = f1score
                 print(f'{best_score:.3f} model saved')
                 self._checkpoint(model, epoch, best_score)
+                print(f'f1score_age:{f1score_age} | f1score_gender:{f1score_gender} | f1score_mask:{f1score_mask}')
 
-            wandb.log({f"f1score_{phase}":f1score, f"loss_{phase}":total_loss }, step=epoch)
+            if not self.config['experiment']['debugging']:
+                wandb.log({f"f1score_{phase}":f1score, f"loss_{phase}":total_loss }, step=epoch)
 
         return best_score
         
     def train(self):
-        wandb.init(project='image_classification', reinit=True, config=self.config)
-        wandb.run.name = self.date + '_' +self.config['model']['output_structure']
-        wandb.run.save()
+        if not self.config['experiment']['debugging']:
+            wandb.init(project='image_classification', reinit=True, config=self.config)
+            wandb.run.name = self.date + '_' +self.config['model']['output_structure']
+            wandb.run.save()
 
         set_randomseed(self.config['random_seed'])
         model = Network(self.config).to(self.device)

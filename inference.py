@@ -17,7 +17,7 @@ def get_class(gender, age, mask):
     return [(i[0]*3 + i[1] + i[2]*6).item() for i in d.T]
 
 def main():
-    checkpoint_dir = './checkpoint/1d-13h-4m'
+    checkpoint_dir = './checkpoint/2d-3h-24m'
     config = yaml.load(open(checkpoint_dir + "/config.yaml", "r"), Loader=yaml.FullLoader)
     info = pd.read_csv(os.path.join(config['dir']['input_dir'], 'eval/info.csv')) 
     feeder = TestLoaderWrapper(config, info)

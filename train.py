@@ -10,7 +10,7 @@ def main():
     config = yaml.load(open("./config/" + "config.yaml", "r"), Loader=yaml.FullLoader)
     train_df = pd.read_csv(os.path.join(config['dir']['input_dir'], 'train/train.csv')) 
     
-    if config['experiment']['debuging']:
+    if config['experiment']['debugging']:
         train_df = train_df.loc[:100]
         print('debugging mode')
 
