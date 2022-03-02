@@ -14,21 +14,12 @@ import wandb
 
 ## to-do
 '''
-criterion, optimizer 두개 config로 관리하기
-
--상체만 crop하기-
-resize 384,384하면 위아래로 64가 crop됨.
-이렇게 하면 머리가 잘려서 안좋은 결과를 낳을 수 있다.
-그래서 위는 24 crop
-아래는 52정도 crop하려고 함.
-image[24:460,:,:]
-
+loss, optimizer 두개 config로 관리하기
 cross validation 추가
 age, gender, mask 각각 f1 score logging하기
 image sample추가(정답, 예측값 캡션달기)
 데이터 로더 빠르게하기
 학습 후 개선점을 파악하기 위해서 confusion matirx같은게 있긴 해야할 것 같음!! 해결책을 강구해보기
-
 '''
 
 class Trainer(object):

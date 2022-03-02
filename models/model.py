@@ -2,6 +2,7 @@ from torchvision import models
 from torch import nn
 from torch.nn import functional as F
 from efficientnet_pytorch import EfficientNet
+import timm
 
 class Network(nn.Module):
     def __init__(self, config):
@@ -39,22 +40,14 @@ class Network(nn.Module):
             else: 
                 model = EfficientNet.from_name(model_name)
             
-            # num_ftrs = model._fc.in_features
-            # model._fc = nn.Linear(num_ftrs, n_classes)
-            
         elif 'resnet' in model_name:
             model = models.resnet18(pretrained=pretrained)
                 
-            # num_ftrs = model.fc.in_features
-            # classifier = nn.Sequential(nn.Linear(num_ftrs, n_classes))
-            # model.fc = classifier
-        
         elif 'densenet' in model_name:
             model = models.densenet161(pretrained=pretrained)
-
-            # num_ftrs = model.classifier.in_features
-            # classifier = nn.Sequential(nn.Linear(num_ftrs, n_classes))
-            # model.classifier = classifier
+        
+        elif 'regnet' in model_name:
+            model = timm.create_model('regnetx_004', pretrained=pretrained)
         
         else:
             raise Exception('Model Name Error')

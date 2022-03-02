@@ -67,10 +67,10 @@ class TrainLoaderWrapper(object):
         '''
         return dataset
         '''
-        self.train_df['age_label'] = self.train_df['age'].apply(define_age)
+        #self.train_df['age_label'] = self.train_df['age'].apply(define_age)
 
         mskf = MultilabelStratifiedShuffleSplit(n_splits=1, test_size=self.valid_size, random_state=self.config['random_seed'])
-        for train_idx, valid_idx in mskf.split(self.train_df, self.train_df[['gender','age_label']]):
+        for train_idx, valid_idx in mskf.split(self.train_df, self.train_df[['gender','age']]):
             pass
         
         train_data = processing_df(self.train_df.loc[train_idx].reset_index(drop=True), self.config)
@@ -125,12 +125,13 @@ def get_augmentation(mode) -> torchvision.transforms:
     std = [0.229, 0.224, 0.225]
 
     train_transforms = A.Compose([
-        #A.CenterCrop(384,384),
+        #A.Crop(y_min=24, y_max=460, x_max=384, p=1.0), #[24:460,:,:] / H,W,C
+        A.ToGray(p=1),
         A.Resize(256,256),
         A.HorizontalFlip(p=0.5),
         A.OneOf([
             A.Rotate(limit=(-20,20), p=1),
-            A.PiecewiseAffine(p=1.0, scale=(0.01, 0.05))
+            A.PiecewiseAffine(p=0.8, scale=(0.008, 0.01))
         ], p=1),
         A.OneOf([
             A.RandomBrightnessContrast(p=1),  
@@ -145,7 +146,8 @@ def get_augmentation(mode) -> torchvision.transforms:
     ])
 
     test_transforms = A.Compose([
-        #A.CenterCrop(384,384),
+        #A.Crop(y_min=24, y_max=460, x_max=384, p=1.0),
+        A.ToGray(p=1),
         A.Resize(256,256),
         A.Normalize(mean=mean, std=std),
         ToTensorV2(),
