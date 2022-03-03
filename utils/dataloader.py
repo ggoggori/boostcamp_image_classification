@@ -4,12 +4,12 @@ import torchvision.transforms as transforms
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from torch.utils.data import Dataset, DataLoader
-from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 from utils.processing import *
 import PIL.Image as Image
 import os
 import numpy as np
 import pandas as pd
+import random
 
 class MaskedFaceDataset(Dataset):
     def __init__(self, csv_file:pd.DataFrame, folder:str, transforms=None):
@@ -25,15 +25,17 @@ class MaskedFaceDataset(Dataset):
         gender = sample['gender_label']
         age = sample['age_label']
         mask = sample['mask_label']
-        label = sample['class']
+        label = sample['label']
         image = Image.open(os.path.join(self.folder, sample['detail_path']))
 
         if self.transforms is not None:
             image = self.transforms(image=np.array(image))['image']
+
         
         sample = {'image':image, 'labels':{'gender':gender,
-                                                    'age':age, 'mask':mask,
-                                                    'label':label}}
+                                            'age':age, 'mask':mask,
+                                            'label':label}}
+
         return sample
 
 class MaskedFaceDataset_Test(Dataset):
@@ -56,9 +58,10 @@ class MaskedFaceDataset_Test(Dataset):
         return image
 
 class TrainLoaderWrapper(object):
-    def __init__(self, config:dict, train_df:pd.DataFrame):
+    def __init__(self, config:dict, train_df, valid_df):
         self.config = config
         self.train_df = train_df
+        self.valid_df = valid_df
         self.batch_size = self.config['batch_size']
         self.valid_size = self.config['valid_size']
         self.num_workers = self.config['num_workers']
@@ -67,19 +70,11 @@ class TrainLoaderWrapper(object):
         '''
         return dataset
         '''
-        #self.train_df['age_label'] = self.train_df['age'].apply(define_age)
-
-        mskf = MultilabelStratifiedShuffleSplit(n_splits=1, test_size=self.valid_size, random_state=self.config['random_seed'])
-        for train_idx, valid_idx in mskf.split(self.train_df, self.train_df[['gender','age']]):
-            pass
-        
-        train_data = processing_df(self.train_df.loc[train_idx].reset_index(drop=True), self.config)
-        valid_data = processing_df(self.train_df.loc[valid_idx].reset_index(drop=True), self.config)
         train_T, valid_T = get_augmentation('train')
 
-        train_dataset = MaskedFaceDataset(train_data, self.config['dir']['image_dir'].format('train'),
+        train_dataset = MaskedFaceDataset(self.train_df, self.config['dir']['image_dir'].format('train'),
                                              transforms=train_T)
-        valid_dataset = MaskedFaceDataset(valid_data, self.config['dir']['image_dir'].format('train'),
+        valid_dataset = MaskedFaceDataset(self.valid_df, self.config['dir']['image_dir'].format('train'),
                                              transforms=valid_T)
         
         return train_dataset, valid_dataset

@@ -5,9 +5,9 @@ import torch
 import yaml
 import pandas as pd
 import os
+from tqdm import tqdm
 import warnings
 warnings.filterwarnings('ignore')
-
 
 def get_class(gender, age, mask):
     a = (gender >= 0.5).float().squeeze()
@@ -17,31 +17,55 @@ def get_class(gender, age, mask):
     return [(i[0]*3 + i[1] + i[2]*6).item() for i in d.T]
 
 def main():
-    checkpoint_dir = './checkpoint/2d-3h-24m'
+    checkpoint_dir = './checkpoint/2d-13h-56m'
     config = yaml.load(open(checkpoint_dir + "/config.yaml", "r"), Loader=yaml.FullLoader)
     info = pd.read_csv(os.path.join(config['dir']['input_dir'], 'eval/info.csv')) 
     feeder = TestLoaderWrapper(config, info)
     dataloader = feeder.make_dataloader()
-
     device = get_device()
     model = Network(config)
-    model.load_state_dict(torch.load(os.path.join(checkpoint_dir, config['model']['model_name']+'.pt'))['model'])
-    model = model.to(device)
-    model.eval()
-    
-    preds = []
-    for image in dataloader:
-        image = image.to(device)
+
+    if config['experiment']['cross_validation']:
+        num_fold = config['experiment']['fold']
+    else:
+        num_fold = 1
+
+    total_preds, total_gender, total_age, total_mask = [], [], [], []
+
+    for fold in tqdm(range(1, num_fold+1)):
+        model.load_state_dict(torch.load(os.path.join(checkpoint_dir, config['model']['model_name'] + f'_{fold}.pt'))['model'])
+        model = model.to(device)
+        model.eval()
+        preds, preds_gender, preds_age, preds_mask = torch.tensor([]), torch.tensor([]), torch.tensor([]), torch.tensor([])
+
         if config['model']['output_structure'] == 'single':
-            pred = model(image) 
-            pred = pred.argmax(dim=-1)
-            pred = pred.cpu().numpy()
+            for image in dataloader:
+                image = image.to(device)
+                pred = model(image) 
+                pred = pred.cpu().detach()
+                preds = torch.cat((preds, pred))
+            total_preds.append(preds)
 
         elif config['model']['output_structure'] == 'multiple':
-            gender, age, mask = model(image)
-            pred = get_class(gender, age, mask)
+            for image in dataloader:
+                image = image.to(device)
+                pred = model(image) 
+                gender, age, mask = model(image)
+                preds_gender = torch.cat((preds_gender, gender.cpu().detach()))
+                preds_age = torch.cat((preds_age, age.cpu().detach()))
+                preds_mask = torch.cat((preds_mask, mask.cpu().detach()))
+
+            total_gender.append(preds_gender)
+            total_age.append(preds_age)
+            total_mask.append(preds_mask)
             
-        preds.extend(pred)
+    if config['model']['output_structure'] == 'single':
+        preds = sum(total_preds)/num_fold
+        preds = preds.argmax(dim=-1)
+
+    elif config['model']['output_structure'] == 'multiple':
+        print(sum(total_age)/num_fold)
+        preds = get_class(sum(total_gender)/num_fold, sum(total_age)/num_fold, sum(total_mask)/num_fold)
 
     info['ans'] = preds
     info.to_csv('submission.csv', index=False)

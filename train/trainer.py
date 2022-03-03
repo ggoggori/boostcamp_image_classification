@@ -6,28 +6,18 @@ import numpy as np
 import random
 from tqdm import tqdm
 import os
-import time
-import shutil
-import sys
-import math
 import wandb
 
-## to-do
-'''
-loss, optimizer 두개 config로 관리하기
-cross validation 추가
-'''
-
 class Trainer(object):
-    def __init__(self, config:dict, dataset):
+    def __init__(self, config:dict, dataset, model_checkpoint_dir, fold):
         self.config = config
         self.dataset = dataset
         self.device = get_device()
-        now = time.localtime()
-        self.date = f'{now.tm_mday}d-{now.tm_hour}h-{now.tm_min}m'
-        self.model_checkpoint_dir = os.path.join(self.config['dir']['checkpoint_dir'], self.date)
+        self.fold = fold
+        self.model_checkpoint_dir = model_checkpoint_dir
 
     def train_and_validate_one_epoch(self, model, epoch, dataloaders, criterion_ce, criterion_bce, optimizer, best_score, output_structure):
+
         for phase in ['train', 'valid']:
             dataloader = dataloaders[phase]
             running_loss, correct = 0,0
@@ -47,7 +37,7 @@ class Trainer(object):
                 with torch.set_grad_enabled(phase=='train'):
                     if output_structure == 'single':
                         output = model(image)
-                        loss = criterion_ce(output, target)
+                        loss = criterion_ce(output, target) 
 
                         _, preds = torch.max(output, 1)
                         target_dict['target'].append(target)
@@ -55,8 +45,8 @@ class Trainer(object):
 
                     elif output_structure == 'multiple':
                         gender_out, age_out, mask_out  = model(image)
-                        loss = criterion_bce(gender_out.squeeze(), gender.float()) + criterion_ce(age_out, age) + criterion_ce(mask_out, mask)
-                        
+                        loss = criterion_bce(gender_out.squeeze(), gender.float()) + 1.3*criterion_ce(age_out, age) + criterion_ce(mask_out, mask) 
+
                         preds_gender = (gender >= 0.5).float()
                         _, preds_age = torch.max(age_out, 1)
                         _, preds_mask = torch.max(mask_out, 1)
@@ -73,6 +63,7 @@ class Trainer(object):
 
                 running_loss += loss.item() * image.size(0)
 
+            total_loss = running_loss / len(dataloader.dataset)
             for (key0, value0), (key1, value1) in zip(target_dict.items(), pred_dict.items()):
                 if len(value0) == 0:
                     continue
@@ -81,21 +72,20 @@ class Trainer(object):
     
             if output_structure == 'single':
                 f1score, total_acc = cal_metric(pred_dict['target'], target_dict['target'], total_size, self.config['model']['num_classes'])
+                print(f'{self.fold}|{phase}-[EPOCH:{epoch}] |F1: {f1score:.3f} | ACC: {total_acc:.3f} | Loss: {total_loss:.5f}|')
+
             elif output_structure == 'multiple':
                 f1score_age, total_acc_age = cal_metric(pred_dict['age'], target_dict['age'], total_size, 3)
                 f1score_gender, total_acc_gender = cal_metric(pred_dict['gender'], target_dict['gender'], total_size, 2)
                 f1score_mask, total_acc_mask = cal_metric(pred_dict['mask'], target_dict['mask'], total_size, 6)
                 f1score = np.mean([f1score_age, f1score_gender, f1score_mask])
                 total_acc = np.mean([total_acc_age, total_acc_gender, total_acc_mask])
-
-            total_loss = running_loss / len(dataloader.dataset)
-            print(f'{phase}-[EPOCH:{epoch}] |F1: {f1score:.3f} | ACC: {total_acc:.3f} | Loss: {total_loss:.5f}|')
+                print(f'{self.fold}|{phase}-[EPOCH:{epoch}] |F1: {f1score:.3f} | f1score_age:{f1score_age:.3f} | f1score_gender:{f1score_gender:.3f} | f1score_mask:{f1score_mask:.3f} | ACC: {total_acc:.3f} | Loss: {total_loss:.5f}|')
 
             if phase == 'valid' and f1score > best_score:
                 best_score = f1score
                 print(f'{best_score:.3f} model saved')
                 self._checkpoint(model, epoch, best_score)
-                print(f'f1score_age:{f1score_age} | f1score_gender:{f1score_gender} | f1score_mask:{f1score_mask}')
 
             if not self.config['experiment']['debugging']:
                 wandb.log({f"f1score_{phase}":f1score, f"loss_{phase}":total_loss }, step=epoch)
@@ -105,29 +95,30 @@ class Trainer(object):
     def train(self):
         if not self.config['experiment']['debugging']:
             wandb.init(project='image_classification', reinit=True, config=self.config)
-            wandb.run.name = self.date + '_' +self.config['model']['output_structure']
+            wandb.run.name = self.model_checkpoint_dir.split('/')[-1] + '_' +self.config['model']['output_structure']
             wandb.run.save()
 
         set_randomseed(self.config['random_seed'])
         model = Network(self.config).to(self.device)
+
         criterion_ce = torch.nn.CrossEntropyLoss()
         criterion_bce = torch.nn.BCELoss()
+
         optimizer = torch.optim.AdamW(model.parameters(), lr=float(self.config['LR']))
         output_structure = self.config['model']['output_structure'] 
         
         train_dataloader, valid_dataloader = self.dataset.make_dataloader()
         dataloaders = {'train':train_dataloader, 'valid': valid_dataloader}
-        self._make_checkpoint_dir()
-        
-        sys.stdout = open(self.model_checkpoint_dir +'/training_log.txt', 'w')
-        print(train_dataloader.dataset.transforms)
+    
+        print('*****'*40)
+        print(self.fold, '-fold training start!')
+        print('*****'*40)
 
         best_score = 0
         for epoch in tqdm(range(self.config['num_epochs'])):
             best_score = self.train_and_validate_one_epoch(model, epoch, dataloaders, 
-                                                        criterion_ce, criterion_bce, optimizer, best_score, output_structure)
-
-        sys.stdout.close()
+                                                            criterion_ce, criterion_bce,
+                                                            optimizer, best_score, output_structure)
 
     def _checkpoint(self, model, epoch, f1score):
         state = {
@@ -135,13 +126,7 @@ class Trainer(object):
             'epoch' : epoch,
             'f1_score' : f1score
         }
-        torch.save(state, os.path.join(self.model_checkpoint_dir, f"{self.config['model']['model_name']}.pt"))
-
-    def _make_checkpoint_dir(self):
-        if not os.path.exists(self.model_checkpoint_dir):
-            os.makedirs(self.model_checkpoint_dir)
-
-        shutil.copy('./config/config.yaml', self.model_checkpoint_dir)
+        torch.save(state, os.path.join(self.model_checkpoint_dir, f"{self.config['model']['model_name']}_{self.fold}.pt"))
 
 def set_randomseed(random_seed):
     torch.manual_seed(random_seed)
